@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bulk Warranty Lookup</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    body { background: #eef1f6; font-family: 'Segoe UI', sans-serif; }
+
+    .hero {
+      background: linear-gradient(135deg, #0a1628 0%, #0d3b7a 60%, #1565c0 100%);
+      border-radius: 16px; padding: 2rem 2.5rem; margin-bottom: 1.75rem;
+      display: flex; align-items: center; justify-content: space-between;
+      overflow: hidden; box-shadow: 0 8px 32px rgba(13,59,122,.35);
+    }
+    .hero-text h1 { font-size: 2rem; font-weight: 800; color: #fff; margin: 0 0 .4rem; letter-spacing: -.5px; }
+    .hero-text p  { color: #90caf9; margin: 0; font-size: .95rem; }
+    .hero-text .badge-pill {
+      background: rgba(255,255,255,.12); color: #fff; border-radius: 20px;
+      padding: .25rem .75rem; font-size: .75rem; margin-top: .6rem; display: inline-block;
+    }
+    .hero-img { height: 150px; object-fit: contain; flex-shrink: 0; margin-left: 1.5rem; transform: scaleX(-1); }
+
+    .card { border: none; border-radius: 14px; box-shadow: 0 2px 16px rgba(0,0,0,.07); }
+    .card-title { font-weight: 700; color: #1a1a2e; }
+
+    #drop-zone {
+      border: 2.5px dashed #1565c0; border-radius: 12px; padding: 2.5rem;
+      text-align: center; cursor: pointer;
+      transition: background .2s, border-color .2s; background: #f7f9ff;
+    }
+    #drop-zone:hover, #drop-zone.drag-over { background: #e3ecff; border-color: #0d6efd; }
+    #drop-zone svg { color: #1565c0; }
+    #drop-zone .lead { font-weight: 600; color: #1a1a2e; }
+
+    .progress { border-radius: 10px; background: #dde3f0; }
+    .progress-bar { border-radius: 10px; background: linear-gradient(90deg,#1565c0,#42a5f5); }
+
+    .badge-ok   { background: #1b8a4f; }
+    .badge-err  { background: #c62828; }
+    .badge-skip { background: #e6a817; color: #000; }
+
+    th { white-space: nowrap; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: #555; }
+    #results-table-wrap { max-height: 480px; overflow-y: auto; }
+    code { font-size: .83em; color: #1565c0; }
+
+    .step-label {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; border-radius: 50%;
+      background: #1565c0; color: #fff; font-weight: 700; font-size: .8rem;
+      margin-right: .5rem; flex-shrink: 0;
+    }
+    .card-title-row { display: flex; align-items: center; margin-bottom: 1rem; }
+
+    .vendor-pill {
+      display: inline-block; font-size: .7rem; font-weight: 700;
+      padding: .15rem .5rem; border-radius: 6px; color: #fff; letter-spacing: .03em;
+    }
+    .v-hp     { background: #0d6efd; }
+    .v-lenovo { background: #e2231a; }
+    .v-dell   { background: #007db8; }
+    .v-other  { background: #6c757d; }
+  </style>
+</head>
+<body>
+<div class="container py-4" style="max-width:960px">
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-text">
+      <h1>Bulk Warranty Lookup</h1>
+      <p>Upload a CSV with a Makes and Serials (Selects HP, Lenovo &amp; Dell per Make column) </p>
+      <span class="badge-pill">&#x1F631; Purchase Date and EOL date (Purchase Date + 5 yrs) will be added as columns</span>
+    </div>
+    <img src="https://hp.hidemybackground.com/static/pepe.png?v=3" alt="Pepe" class="hero-img" />
+  </div>
+
+  <!-- Step 1: Upload -->
+  <div class="card mb-4" id="step-upload">
+    <div class="card-body p-4">
+      <div class="card-title-row">
+        <span class="step-label">1</span>
+        <h5 class="card-title mb-0">Upload CSV</h5>
+      </div>
+      <div id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="currentColor" class="mb-2" viewBox="0 0 16 16">
+          <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+          <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+        </svg>
+        <p class="mb-1 lead">Click or drag &amp; drop a CSV file</p>
+        <p class="text-muted small mb-0">Needs a serial number column &nbsp;·&nbsp; and Make column to route by vendor</p>
+      </div>
+      <input type="file" id="file-input" accept=".csv,text/csv" class="d-none" />
+    </div>
+  </div>
+
+  <!-- Step 2: Column mapping -->
+  <div class="card mb-4 d-none" id="step-map">
+    <div class="card-body p-4">
+      <div class="card-title-row">
+        <span class="step-label">2</span>
+        <h5 class="card-title mb-0">Configure Columns</h5>
+      </div>
+      <div class="row g-3">
+        <div class="col-sm-4">
+          <label class="form-label fw-semibold">Serial number column <span class="text-danger">*</span></label>
+          <select class="form-select" id="serial-col">
+            <option value="">— select column —</option>
+          </select>
+          <div class="form-text" id="preview-info"></div>
+        </div>
+        <div class="col-sm-4">
+          <label class="form-label fw-semibold">Make column <span class="text-danger">*</span></label>
+          <select class="form-select" id="make-col">
+            <option value="">— select column —</option>
+          </select>
+          <div class="form-text" id="make-preview"></div>
+        </div>
+        <div class="col-sm-4">
+          <label class="form-label fw-semibold">Overwrite existing dates?</label>
+          <div class="form-check mt-1">
+            <input class="form-check-input" type="checkbox" id="overwrite-check" checked />
+            <label class="form-check-label" for="overwrite-check">
+              Overwrite <code>Purchase_Date</code> / <code>EOL_Date</code> if already filled
+            </label>
+          </div>
+          <div class="form-text" id="existing-cols-note"></div>
+        </div>
+      </div>
+      <div class="mt-3">
+        <button class="btn btn-primary" id="btn-process">
+          Process <span id="row-count"></span> rows
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="card mb-4 d-none" id="step-progress">
+    <div class="card-body p-4">
+      <div class="card-title-row">
+        <span class="step-label">⏳</span>
+        <h5 class="card-title mb-0">Processing…</h5>
+      </div>
+      <div class="progress mb-2" style="height:22px">
+        <div class="progress-bar progress-bar-striped progress-bar-animated" id="pbar"
+             style="width:0%" role="progressbar"></div>
+      </div>
+      <p class="text-muted small mb-0" id="progress-label">0 / 0</p>
+      <p class="text-muted small mb-0 mt-1">HP runs sequentially (~30s each) to avoid rate limits. Lenovo runs in parallel.</p>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="card d-none" id="step-results">
+    <div class="card-body p-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="card-title mb-0">&#10003; Results</h5>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-secondary btn-sm" id="btn-reset">Start over</button>
+          <button class="btn btn-success btn-sm" id="btn-download">&#8659; Download CSV</button>
+        </div>
+      </div>
+      <p id="summary" class="mb-3 small"></p>
+      <div id="results-table-wrap">
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th>#</th>
+              <th>Serial Number</th>
+              <th>Make</th>
+              <th>Purchase_Date</th>
+              <th>EOL_Date</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const HP_API    = 'https://hp.hidemybackground.com/warranty-check';
+const OUT_START = 'Purchase_Date';
+const OUT_END   = 'EOL_Date';
+
+const SN_CANDIDATES   = ['serialnumber','serial_number','serial','sn','assetserialnumber','asset serial'];
+const MAKE_CANDIDATES = ['make','manufacturer','brand','vendor','oem','mfr'];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let parsedData = [], allHeaders = [], outputRows = [], snCol = '', makeCol = '';
+
+// ── File handling ─────────────────────────────────────────────────────────────
+const fileInput = document.getElementById('file-input');
+const dropZone  = document.getElementById('drop-zone');
+
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+function handleFile(file) {
+  Papa.parse(file, {
+    header: true, skipEmptyLines: true,
+    complete(res) {
+      // Strip empty or auto-generated (_1, _2 …) columns PapaParse creates for trailing commas
+      const junk = /^_\d+$|^$/;
+      allHeaders = (res.meta.fields || []).filter(h => !junk.test(h));
+      parsedData = res.data.map(row => {
+        const clean = {};
+        allHeaders.forEach(h => { clean[h] = row[h]; });
+        return clean;
+      });
+      populateMapping();
+    }
+  });
+}
+
+function populateMapping() {
+  const snSel   = document.getElementById('serial-col');
+  const makeSel = document.getElementById('make-col');
+
+  snSel.innerHTML   = `<option value="">— select column —</option>` +
+                      allHeaders.map(h => `<option value="${h}">${h}</option>`).join('');
+  makeSel.innerHTML = `<option value="">— select column —</option>` +
+                      allHeaders.map(h => `<option value="${h}">${h}</option>`).join('');
+
+  const snAuto = allHeaders.find(h => SN_CANDIDATES.includes(h.toLowerCase().replace(/\s+/g,'').replace(/_/g,'')));
+  if (snAuto) snSel.value = snAuto;
+
+  const makeAuto = allHeaders.find(h => MAKE_CANDIDATES.includes(h.toLowerCase().trim()));
+  if (makeAuto) makeSel.value = makeAuto;
+
+  const updateSnPreview = () => {
+    const s = parsedData.slice(0,3).map(r => r[snSel.value]).filter(Boolean).join(', ');
+    document.getElementById('preview-info').textContent = s ? `e.g. ${s}` : '';
+  };
+  const updateMakePreview = () => {
+    if (!makeSel.value) { document.getElementById('make-preview').textContent = ''; return; }
+    const vals = [...new Set(parsedData.slice(0,8).map(r => r[makeSel.value]).filter(Boolean))].join(', ');
+    document.getElementById('make-preview').textContent = vals ? `e.g. ${vals}` : '';
+  };
+
+  snSel.addEventListener('change', () => { updateSnPreview(); snSel.classList.remove('is-invalid'); });
+  makeSel.addEventListener('change', () => { updateMakePreview(); makeSel.classList.remove('is-invalid'); });
+  updateSnPreview();
+  updateMakePreview();
+
+  const hasDates = allHeaders.some(h => [OUT_START, OUT_END].includes(h));
+  document.getElementById('existing-cols-note').textContent =
+    hasDates ? `${OUT_START} / ${OUT_END} columns found in CSV.` : '';
+
+  document.getElementById('row-count').textContent = parsedData.length;
+  document.getElementById('step-upload').classList.add('d-none');
+  document.getElementById('step-map').classList.remove('d-none');
+}
+
+// ── Process ───────────────────────────────────────────────────────────────────
+document.getElementById('btn-process').addEventListener('click', async () => {
+  snCol   = document.getElementById('serial-col').value;
+  makeCol = document.getElementById('make-col').value;
+  const overwrite = document.getElementById('overwrite-check').checked;
+
+  if (!snCol) {
+    document.getElementById('serial-col').classList.add('is-invalid');
+    document.getElementById('serial-col').focus();
+    return;
+  }
+  if (!makeCol) {
+    document.getElementById('make-col').classList.add('is-invalid');
+    document.getElementById('make-col').focus();
+    return;
+  }
+  document.getElementById('serial-col').classList.remove('is-invalid');
+  document.getElementById('make-col').classList.remove('is-invalid');
+
+  const toFetch = parsedData
+    .map((row, i) => ({
+      row, i,
+      sn:   (row[snCol]   || '').trim(),
+      make: makeCol ? (row[makeCol] || '').trim() : 'HP'
+    }))
+    .filter(item => {
+      if (!item.sn) return false;
+      if (!overwrite && item.row[OUT_START] && item.row[OUT_END]) return false;
+      return true;
+    });
+
+  document.getElementById('step-map').classList.add('d-none');
+  document.getElementById('step-progress').classList.remove('d-none');
+
+  const apiResults = {};
+  let done = 0;
+  const total = toFetch.length;
+
+  const updateBar = () => {
+    document.getElementById('pbar').style.width = Math.round((done / total) * 100) + '%';
+    document.getElementById('progress-label').textContent = `${done} / ${total}`;
+  };
+  updateBar();
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  const hpItems    = toFetch.filter(x => normalizeVendor(x.make) === 'hp');
+  const otherItems = toFetch.filter(x => normalizeVendor(x.make) !== 'hp');
+
+  // Non-HP: run in parallel
+  await Promise.all(otherItems.map(async item => {
+    apiResults[item.sn.toUpperCase()] = await fetchWarranty(item.sn, item.make);
+    done++; updateBar();
+  }));
+
+  // HP: sequential with 3s gap to avoid rate limiting
+  for (let i = 0; i < hpItems.length; i++) {
+    apiResults[hpItems[i].sn.toUpperCase()] = await fetchWarranty(hpItems[i].sn, hpItems[i].make);
+    done++; updateBar();
+    if (i < hpItems.length - 1) await sleep(3000);
+  }
+
+  // Merge back into rows
+  outputRows = parsedData.map(row => {
+    const sn = (row[snCol] || '').trim().toUpperCase();
+    const r  = apiResults[sn];
+    const out = { ...row };
+    if (r) {
+      if (overwrite || !out[OUT_START]) out[OUT_START] = r.startDate || '';
+      if (overwrite || !out[OUT_END])   out[OUT_END]   = r.endDate   || '';
+    }
+    return out;
+  });
+
+  showResults(apiResults, toFetch);
+});
+
+// ── Vendor routing ────────────────────────────────────────────────────────────
+function normalizeVendor(make) {
+  const m = (make || '').toLowerCase();
+  if (m.includes('lenovo'))                   return 'lenovo';
+  if (m.includes('dell'))                     return 'dell';
+  if (m.includes('hp') || m.includes('hewlett')) return 'hp';
+  return 'hp';
+}
+
+async function fetchWarranty(serial, make) {
+  switch (normalizeVendor(make)) {
+    case 'lenovo': return fetchLenovo(serial);
+    case 'dell':   return fetchDell(serial);
+    default:       return fetchHP(serial);
+  }
+}
+
+async function fetchHP(serial) {
+  try {
+    const resp = await fetch(`${HP_API}/${encodeURIComponent(serial)}`);
+    if (resp.ok) return await resp.json();
+    const err = await resp.json().catch(() => ({}));
+    return { serialNumber: serial, startDate: null, endDate: null, error: err.detail || `HTTP ${resp.status}` };
+  } catch (e) {
+    return { serialNumber: serial, startDate: null, endDate: null, error: e.message };
+  }
+}
+
+async function fetchLenovo(serial) {
+  try {
+    const resp = await fetch(`${HP_API}/lenovo/${encodeURIComponent(serial)}`);
+    if (resp.ok) return await resp.json();
+    const err = await resp.json().catch(() => ({}));
+    return { serialNumber: serial, startDate: null, endDate: null, error: err.detail || `HTTP ${resp.status}` };
+  } catch (e) {
+    return { serialNumber: serial, startDate: null, endDate: null, error: e.message };
+  }
+}
+
+async function fetchDell(serial) {
+  try {
+    const resp = await fetch(`${HP_API}/dell/${encodeURIComponent(serial)}`);
+    if (resp.ok) return await resp.json();
+    const err = await resp.json().catch(() => ({}));
+    return { serialNumber: serial, startDate: null, endDate: null, error: err.detail || `HTTP ${resp.status}` };
+  } catch (e) {
+    return { serialNumber: serial, startDate: null, endDate: null, error: e.message };
+  }
+}
+
+// ── Results table ─────────────────────────────────────────────────────────────
+function showResults(apiResults, toFetch) {
+  document.getElementById('step-progress').classList.add('d-none');
+  document.getElementById('step-results').classList.remove('d-none');
+
+  let ok = 0, err = 0, skip = 0;
+  const tbody = document.getElementById('results-body');
+  tbody.innerHTML = '';
+
+  parsedData.forEach((row, i) => {
+    const sn   = (row[snCol] || '').trim();
+    const snU  = sn.toUpperCase();
+    const make = makeCol ? (row[makeCol] || 'HP') : 'HP';
+    const vendor = normalizeVendor(make);
+    const vendorLabel = vendor.charAt(0).toUpperCase() + vendor.slice(1);
+    const r = apiResults[snU];
+    const out = outputRows[i];
+
+    let badge, statusText;
+    if (!r) {
+      skip++;
+      badge = '<span class="badge badge-skip">Skipped</span>';
+      statusText = 'Already filled';
+    } else if (r.error) {
+      err++;
+      badge = '<span class="badge badge-err">Error</span>';
+      statusText = r.error;
+    } else {
+      ok++;
+      badge = '<span class="badge badge-ok">OK</span>';
+      statusText = '';
+    }
+
+    const vClass = { hp: 'v-hp', lenovo: 'v-lenovo', dell: 'v-dell' }[vendor] || 'v-other';
+
+    tbody.insertAdjacentHTML('beforeend', `
+      <tr>
+        <td class="text-muted">${i + 1}</td>
+        <td><code>${sn || '—'}</code></td>
+        <td><span class="vendor-pill ${vClass}">${vendorLabel}</span></td>
+        <td>${out[OUT_START] || '—'}</td>
+        <td>${out[OUT_END]   || '—'}</td>
+        <td>${badge}${statusText ? `<span class="text-muted small ms-1">${statusText}</span>` : ''}</td>
+      </tr>`);
+  });
+
+  document.getElementById('summary').textContent = `${ok} filled · ${err} errors · ${skip} skipped`;
+
+  document.getElementById('btn-download').onclick = () => {
+    const cols = [...new Set([...allHeaders, OUT_START, OUT_END])];
+    const csv  = Papa.unparse(outputRows, { columns: cols });
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })),
+      download: 'warranty_results.csv'
+    });
+    a.click();
+  };
+}
+
+// ── Reset ─────────────────────────────────────────────────────────────────────
+document.getElementById('btn-reset').addEventListener('click', () => {
+  parsedData = []; allHeaders = []; outputRows = []; snCol = ''; makeCol = '';
+  fileInput.value = '';
+  ['step-map','step-progress','step-results'].forEach(id =>
+    document.getElementById(id).classList.add('d-none'));
+  document.getElementById('step-upload').classList.remove('d-none');
+  document.getElementById('results-body').innerHTML = '';
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+.env
+keys.txt
+__pycache__/
+*.pyc
+*.pyo

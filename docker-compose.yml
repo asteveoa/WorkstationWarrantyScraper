@@ -1,0 +1,22 @@
+services:
+  hp-warranty-api:
+    build: .
+    image: hp-warranty-api:latest
+    container_name: hp-warranty-api
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      - MAX_CONCURRENCY=3
+    restart: unless-stopped
+    shm_size: "256mb"
+
+  warranty-frontend:
+    image: nginx:alpine
+    container_name: warranty-frontend
+    ports:
+      - "8080:80"
+    volumes:
+      - ./warranty-frontend:/usr/share/nginx/html:ro
+      - ./warranty-frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
